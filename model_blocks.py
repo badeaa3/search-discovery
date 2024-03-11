@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from info_nce import InfoNCE
 
 device = "cuda:0"
 device = "cpu"
@@ -53,10 +52,6 @@ class SignatureDiscovery(nn.Module):
     ):
 
         super().__init__()
-        
-        input_dim = dimensions[0]
-        self.input_bn = nn.BatchNorm1d(input_dim) if normalize_input else None
-        self.input_ln = nn.LayerNorm(input_dim) if normalize_input else None
 
         # model
         self.embed = DNN_block(embed_dimensions, embed_normalize_input)
@@ -67,4 +62,11 @@ class SignatureDiscovery(nn.Module):
         e = self.embed(x)
         b = self.bkg(e)
         return e, b
+
+if __name__ == "__main__":
+
+    x = torch.Tensor(15,10) # batch x features
+    m = SignatureDiscovery([10, 10, 5], False, [5, 3, 1], False)
+    e, b = m(x)
+    print(e.shape, b.shape)
         

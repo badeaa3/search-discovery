@@ -1,14 +1,40 @@
 import torch
+import torch.nn.functional as F
 import pytorch_lightning as pl
 import model_blocks as mb
+
+'''
+SimCLR loss for contrastive learning https://arxiv.org/abs/2002.05709
+code copied from https://uvadlc-notebooks.readthedocs.io/en/latest/tutorial_notebooks/tutorial17/SimCLR.html
+'''
+def SimCLR(feats, temperature=1):
+
+    # Calculate cosine similarity
+    cos_sim = F.cosine_similarity(feats[:,None,:], feats[None,:,:], dim=-1)
+    # Mask out cosine similarity to itself
+    self_mask = torch.eye(cos_sim.shape[0], dtype=torch.bool) #, device=cos_sim.device)
+    cos_sim.masked_fill_(self_mask, -9e15)
+    print(self_mask, cos_sim.shape[0]//2)
+    # Find positive example -> batch_size//2 away from the original example
+    pos_mask = self_mask.roll(shifts=cos_sim.shape[0]//2, dims=0) # this needs to be updated
+    print(pos_mask)
+    # InfoNCE loss
+    cos_sim = cos_sim / temperature
+    nll = -cos_sim[pos_mask] + torch.logsumexp(cos_sim, dim=-1)
+    nll = nll.mean()
+    return nll
 
 class Model(pl.LightningModule):
 
     def __init__(
         self,
+        embed_dimensions,
+        embed_normalize_input,
+        bkg_dimensions,
+        bkg_normalize_input,
         lr = 1e-3,
         weights = None,
-		):
+	):
         
         super().__init__()
 
@@ -27,8 +53,8 @@ class Model(pl.LightningModule):
 
     def forward(self, x):
 
-        embedding, bkg = self.model(x)
-        return embedding, bkg
+        emb, bkg = self.model(x)
+        return emb, bkg
         
     def step(self, batch, batch_idx, version, dataloader_idx=0):
         
@@ -55,13 +81,38 @@ class Model(pl.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-5)
         return optimizer
 
-    def loss(self, loss, mu_logvar, xloss, randloss, candidates_p4, jet_choice):
+    def loss(self, emb, bkg, y):
 
         # total loss
         l = {}
-        l["distances"]   =  0
-        
+
+        # cdistance
+        l["contrastive"] = SimCLR(feats=emb, temperature=1)
+
+        # background estimate
+        l["bkg"] = torch.nn.MSELoss(bkg, y)
+
         # get total
         l['loss'] = sum(l.values())
 
         return l
+
+if __name__ == "__main__":
+
+    x = torch.Tensor(3,10) # batch x features
+    y = torch.Tensor([ # test 4 SR's
+        [1, 0, 1, 0],
+        [0, 0, 1, 1],
+        [0, 1, 1, 1]
+    ])
+    print(y.shape)
+    m = Model([10, 10, 5], False, [5, 3, 1], False)
+    emb, bkg = m(x)
+    print(emb.shape, bkg.shape)
+
+    # SimCLR
+    # temperature
+    temperature = 1
+    nll = SimCLR(feats=emb, temperature=1)
+    print(nll)
+
