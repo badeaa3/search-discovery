@@ -6,21 +6,34 @@ Date: March 18, 2023
 import pandas as pd
 import numpy as np
 import torch
+import argparse
 
 def loadData(inFile):
     
     df = pd.read_hdf(inFile) # "data/testfile_files100_35.h5"
     n = 100
     # inputs
-    x = [i for i in df.columns if "201" not in i and "isinSR" not in i and "model" not in i]
+    # x = [i for i in df.columns if "201" not in i and "isinSR" not in i and "model" not in i]
+    # x = torch.Tensor(np.array(df[:n][x]))
+    # y = [i for i in df.columns if "201" in i]
+    # y = torch.Tensor(np.array(df[:n][y]))
+
+    # pick columns
+    x = [i for i in df.columns if "feature" in i]
+    y = [i for i in df.columns if "SR" in i]
+    # load tensors
     x = torch.Tensor(np.array(df[:n][x]))
-    y = [i for i in df.columns if "201" in i]
     y = torch.Tensor(np.array(df[:n][y]))
+
     return x, y
 
 if __name__ == "__main__":
     
-    X, Y = loadData()
+    parser = argparse.ArgumentParser(usage=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-i", "--inFile", help="Input training file.", default=None, required=True)
+    ops = parser.parse_args()
+
+    X, Y = loadData(ops.inFile)
     print(X.shape, Y.shape)
 
     from sklearn.model_selection import train_test_split
