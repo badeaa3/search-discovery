@@ -1,9 +1,11 @@
+'''
+Author: Anthony Badea
+Date: March 18, 2023
+'''
+
 import torch
 import torch.nn as nn
 import numpy as np
-
-device = "cuda:0"
-device = "cpu"
 
 #%%%%%%% Classes %%%%%%%%#
 

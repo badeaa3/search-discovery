@@ -1,3 +1,8 @@
+'''
+Author: Anthony Badea
+Date: March 18, 2023
+'''
+
 import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl
@@ -60,9 +65,10 @@ class Model(pl.LightningModule):
         
         # run model
         x, y = batch
+        emb, bkg = self(x)
 
         # compute loss
-        loss = self.loss(embedding, bkg, y)
+        loss = self.loss(emb, bkg, y)
 
         # log the loss
         if dataloader_idx==0:
@@ -74,7 +80,7 @@ class Model(pl.LightningModule):
     def training_step(self, batch, batch_idx, debug=False):
         return self.step(batch, batch_idx, "train")
 
-    def validation_step(self, batch, batch_idx, dataloader_idx, debug=False):
+    def validation_step(self, batch, batch_idx, debug=False):
         return self.step(batch, batch_idx, "val")
 
     def configure_optimizers(self):
@@ -90,7 +96,7 @@ class Model(pl.LightningModule):
         l["contrastive"] = SimCLR(feats=emb, temperature=1)
 
         # background estimate
-        l["bkg"] = torch.nn.MSELoss(bkg, y)
+        # l["bkg"] = torch.nn.MSELoss(bkg, y) # TO-DO: Add in the background function
 
         # get total
         l['loss'] = sum(l.values())
@@ -99,26 +105,8 @@ class Model(pl.LightningModule):
 
 if __name__ == "__main__":
 
-    import pandas as pd
-    import numpy as np
-
-    # load file and events
-    df = pd.read_hdf("data/testfile_files100_35.h5")
-    n = 100
-    # inputs
-    x = [i for i in df.columns if "201" not in i and "isinSR" not in i and "model" not in i]
-    x = torch.Tensor(np.array(df[:n][x]))
-    y = [i for i in df.columns if "201" in i]
-    y = torch.Tensor(np.array(df[:n][y]))
-    print(x.shape, y.shape)
-    # x = torch.Tensor(3,10) # batch x features
-    # y = torch.Tensor([ # test 4 SR's
-    #     [1, 0, 1, 0],
-    #     [0, 0, 1, 1],
-    #     [0, 1, 1, 1]
-    # ])
-    # print(y.shape)
-    m = Model([x.shape[1], 10, 5], False, [5, 3, 1], False)
+    x = torch.Tensor(15,10) # batch x features
+    m = Model([10, 10, 5], False, [5, 3, 1], False)
     emb, bkg = m(x)
     print(emb.shape, bkg.shape)
 
