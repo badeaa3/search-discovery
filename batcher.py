@@ -7,9 +7,9 @@ import pandas as pd
 import numpy as np
 import torch
 
-def loadData():
+def loadData(inFile):
     
-    df = pd.read_hdf("data/testfile_files100_35.h5")
+    df = pd.read_hdf(inFile) # "data/testfile_files100_35.h5"
     n = 100
     # inputs
     x = [i for i in df.columns if "201" not in i and "isinSR" not in i and "model" not in i]

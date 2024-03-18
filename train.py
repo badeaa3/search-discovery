@@ -28,7 +28,7 @@ if __name__ == "__main__":
     # user options
     parser = argparse.ArgumentParser(usage=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # parser.add_argument("-c", "--config_file", help="Configuration file.", default="./config_files/default_config.json")
-    # parser.add_argument("-i", "--inFile", help="Input training file.", default=None, required=True)
+    parser.add_argument("-i", "--inFile", help="Input training file.", default=None, required=True)
     parser.add_argument("-o", "--outDir", help="File name of the output directory", default="./checkpoints")
     parser.add_argument("-e", "--max_epochs", help="Max number of epochs to train on", default=None, type=int)
     parser.add_argument("-s", "--max_steps", help="Max number of steps to train on", default=-1, type=int)
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     pin_memory = (device == "gpu")
 
     # load data
-    X, Y = loadData()
+    X, Y = loadData(ops.inFile)
     X_train, X_val, Y_train, Y_val = train_test_split(X, Y, test_size = 0.1)
     print(f"X_train {X_train.shape}, Y_train {Y_train.shape}, X_val {X_val.shape}, Y_val {Y_val.shape}")
     train_dataloader = DataLoader(TensorDataset(X_train, Y_train), shuffle=True, num_workers=4) # pin_memory=pin_memory) #, batch_size=config["batch_size"])
