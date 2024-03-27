@@ -52,6 +52,7 @@ if __name__ == "__main__":
     #train_dataloader = DataLoader(train_ds, num_workers=4, batch_size=64, worker_init_fn=pMSSMDatasetIterable.worker_init_fn) # pin_memory=pin_memory) #, batch_size=config["batch_size"])
     #val_dataloader   = DataLoader(val_ds,   num_workers=4, batch_size=64, worker_init_fn=pMSSMDatasetIterable.worker_init_fn) # pin_memory=pin_memory) #, batch_size=config["batch_size"])
     ds = concatDatasets(ops.inFiles)
+    print("Total dataset size:",len(ds))
     train_ds, val_ds  = torch.utils.data.random_split(ds, [0.8, 0.2])
     train_dataloader = DataLoader(train_ds, num_workers=4, batch_size=64) # pin_memory=pin_memory) #, batch_size=config["batch_size"])
     val_dataloader   = DataLoader(val_ds,   num_workers=4, batch_size=64) # pin_memory=pin_memory) #, batch_size=config["batch_size"])
