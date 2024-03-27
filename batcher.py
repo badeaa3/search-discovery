@@ -4,42 +4,54 @@ Date: March 18, 2023
 '''
 
 import pandas as pd
-import numpy as np
 import torch
-import argparse
 
-def loadData(inFile):
-    
-    df = pd.read_hdf(inFile) # "data/testfile_files100_35.h5"
-    n = 100
-    # inputs
-    # x = [i for i in df.columns if "201" not in i and "isinSR" not in i and "model" not in i]
-    # x = torch.Tensor(np.array(df[:n][x]))
-    # y = [i for i in df.columns if "201" in i]
-    # y = torch.Tensor(np.array(df[:n][y]))
+class pMSSMDataset(torch.utils.data.IterableDataset):
+    def __init__(self, data_files):
+        super(pMSSMDataset).__init__()
+        self.data_files = data_files
+        self.SRs = None
+        self.features = None
 
-    # pick columns
-    x = [i for i in df.columns if "feature" in i]
-    y = [i for i in df.columns if "SR" in i]
-    # load tensors
-    x = torch.Tensor(np.array(df[:n][x]))
-    y = torch.Tensor(np.array(df[:n][y]))
+    def __iter__(self):
+        for data_file in self.data_files:
+            df = pd.read_hdf(data_file)
+            if not self.SRs:
+                self.SRs = [x for x in df.columns if x.startswith("SR")]
+                self.features = [x for x in df.columns if x.startswith("feature")]
+                
+            for x,y in zip(df[self.features].itertuples(index=False), df[self.SRs].itertuples(index=False)):
+                yield torch.Tensor(x),torch.Tensor(y).type(torch.uint8)
 
-    return x, y
+    def worker_init_fn(worker_id):
+        '''
+        The whole dataset is given to each worker, need this function to avoid duplication of data across workers
+        Make sure to use as argument when building the DataLoader
+        '''
+        worker_info = torch.utils.data.get_worker_info()
+        dataset = worker_info.dataset  # the dataset copy in this worker process
+        # keep only a subset of data_files
+        dataset.data_files = [f for i,f in enumerate(dataset.data_files) if i%worker_info.num_workers == worker_id]
+
+def train_test_datasets(infiles, test_size):
+    '''
+    Provide an approximate splitting based on number of files
+    '''
+    test_modulo = int(1/test_size)
+    test_files  = [f for i,f in enumerate(infiles) if i%test_modulo==0]
+    train_files = [f for i,f in enumerate(infiles) if i%test_modulo!=0]
+    return pMSSMDataset(train_files),  pMSSMDataset(test_files)
 
 if __name__ == "__main__":
     
+    import argparse
     parser = argparse.ArgumentParser(usage=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-i", "--inFile", help="Input training file.", default=None, required=True)
+    parser.add_argument("-i", "--inFiles", help="Input training file.", nargs="+")
     ops = parser.parse_args()
 
-    X, Y = loadData(ops.inFile)
-    print(X.shape, Y.shape)
+    from torch.utils.data import DataLoader
 
-    from sklearn.model_selection import train_test_split
-    from torch.utils.data import DataLoader, TensorDataset
-
-    X_train, X_val, Y_train, Y_val = train_test_split(X, Y, test_size = 0.1)
-    print(f"X_train {X_train.shape}, Y_train {Y_train.shape}, X_val {X_val.shape}, Y_val {Y_val.shape}")
-    train_dataloader = DataLoader(TensorDataset(X_train, Y_train), shuffle=True, num_workers=4) # pin_memory=pin_memory) #, batch_size=config["batch_size"])
-    val_dataloader = DataLoader(TensorDataset(X_val, Y_val), shuffle=False, num_workers=4) #, pin_memory=pin_memory) #, batch_size=config["batch_size"])
+    ds = pMSSMDataset(ops.inFiles)
+    iterloader = iter(DataLoader(ds, batch_size=4, num_workers=2, worker_init_fn=pMSSMDataset.worker_init_fn))
+    for _ in range(5):
+        print(next(iterloader))

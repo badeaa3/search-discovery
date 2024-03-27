@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 '''
 Author: Anthony Badea
@@ -9,10 +9,9 @@ Date: March 18, 2023
 import os
 import argparse
 import torch
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
-from sklearn.model_selection import train_test_split
 
 import h5py
 import datetime
@@ -20,7 +19,7 @@ import json
 # import yaml
 
 # custom code
-from batcher import loadData
+from batcher import train_test_datasets, pMSSMDataset
 from model import Model
 
 if __name__ == "__main__":
@@ -28,7 +27,7 @@ if __name__ == "__main__":
     # user options
     parser = argparse.ArgumentParser(usage=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # parser.add_argument("-c", "--config_file", help="Configuration file.", default="./config_files/default_config.json")
-    parser.add_argument("-i", "--inFile", help="Input training file.", default=None, required=True)
+    parser.add_argument("-i", "--inFiles", help="Input training files.", nargs="+")
     parser.add_argument("-o", "--outDir", help="File name of the output directory", default="./checkpoints")
     parser.add_argument("-e", "--max_epochs", help="Max number of epochs to train on", default=None, type=int)
     parser.add_argument("-s", "--max_steps", help="Max number of steps to train on", default=-1, type=int)
@@ -49,11 +48,9 @@ if __name__ == "__main__":
     pin_memory = (device == "gpu")
 
     # load data
-    X, Y = loadData(ops.inFile)
-    X_train, X_val, Y_train, Y_val = train_test_split(X, Y, test_size = 0.1)
-    print(f"X_train {X_train.shape}, Y_train {Y_train.shape}, X_val {X_val.shape}, Y_val {Y_val.shape}")
-    train_dataloader = DataLoader(TensorDataset(X_train, Y_train), shuffle=True, num_workers=4) # pin_memory=pin_memory) #, batch_size=config["batch_size"])
-    val_dataloader = DataLoader(TensorDataset(X_val, Y_val), shuffle=False, num_workers=4) #, pin_memory=pin_memory) #, batch_size=config["batch_size"])
+    train_ds, val_ds = train_test_datasets(ops.inFiles, test_size=0.2)
+    train_dataloader = DataLoader(train_ds, num_workers=4, batch_size=64, worker_init_fn=pMSSMDataset.worker_init_fn) # pin_memory=pin_memory) #, batch_size=config["batch_size"])
+    val_dataloader   = DataLoader(val_ds,   num_workers=4, batch_size=64, worker_init_fn=pMSSMDataset.worker_init_fn) # pin_memory=pin_memory) #, batch_size=config["batch_size"])
 
     # make checkpoint dir
     checkpoint_dir = os.path.join(ops.outDir, f'training_{datetime.datetime.now().strftime("%Y.%m.%d.%H.%M.%S")}')
@@ -61,8 +58,9 @@ if __name__ == "__main__":
     if not os.path.isdir(checkpoint_dir):
         os.makedirs(checkpoint_dir)
 
+    Xfirst, Yfirst = next(iter(train_ds)) #first event
     # create model
-    model = Model([X.shape[1], 10, 5], False, [5, 3, 1], False) #**config["model"])
+    model = Model([Xfirst.shape[0], 10, 5], False, [5, 3, 1], False) #**config["model"])
     #model = torch.compile(model) # ready for pytorch 2.0 once it's more stable
 
     # callbacks
