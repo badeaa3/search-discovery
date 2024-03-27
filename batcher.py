@@ -5,10 +5,13 @@ Date: March 18, 2023
 
 import pandas as pd
 import torch
+from torch.utils.data import TensorDataset, IterableDataset, ConcatDataset
 
-class pMSSMDataset(torch.utils.data.IterableDataset):
+
+
+class pMSSMDatasetIterable(IterableDataset):
     def __init__(self, data_files):
-        super(pMSSMDataset).__init__()
+        super(pMSSMDatasetIterable).__init__()
         self.data_files = data_files
         self.SRs = None
         self.features = None
@@ -40,7 +43,24 @@ def train_test_datasets(infiles, test_size):
     test_modulo = int(1/test_size)
     test_files  = [f for i,f in enumerate(infiles) if i%test_modulo==0]
     train_files = [f for i,f in enumerate(infiles) if i%test_modulo!=0]
-    return pMSSMDataset(train_files),  pMSSMDataset(test_files)
+    return pMSSMDatasetIterable(train_files),  pMSSMDatasetIterable(test_files)
+
+def concatDatasets(infiles):
+    dss = []
+    for i,infile in enumerate(infiles):
+        df = pd.read_hdf(infile)
+        # pick columns
+        x = [i for i in df.columns if i.startswith("feature")]
+        y = [i for i in df.columns if i.startswith("SR")]
+        # load tensors
+        x = torch.Tensor(df[x].values)
+        y = torch.Tensor(df[y].values).type(torch.int8) #keep memory low
+        dss.append(TensorDataset(x,y))
+        del df
+    
+    ds = ConcatDataset(dss)
+    return ds
+
 
 if __name__ == "__main__":
     
@@ -51,7 +71,7 @@ if __name__ == "__main__":
 
     from torch.utils.data import DataLoader
 
-    ds = pMSSMDataset(ops.inFiles)
-    iterloader = iter(DataLoader(ds, batch_size=4, num_workers=2, worker_init_fn=pMSSMDataset.worker_init_fn))
+    ds = pMSSMDatasetIterable(ops.inFiles)
+    iterloader = iter(DataLoader(ds, batch_size=4, num_workers=2, worker_init_fn=pMSSMDatasetIterable.worker_init_fn))
     for _ in range(5):
         print(next(iterloader))
